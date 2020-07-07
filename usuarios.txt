@@ -1,0 +1,8 @@
+edisson;100;0
+juan;200;0
+luis;300;0
+diego;400;0
+luis;500;0
+alex;600;0
+alex;700;0
+juan;800;0
