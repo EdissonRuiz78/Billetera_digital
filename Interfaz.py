@@ -30,46 +30,81 @@ class Criptomoneda(object):
 """ Funcion para validar usarios predeterminados en un diccionario """
 def validarUsuario(codigo):
 	if codigo in diccionario_usuarios:
-		Interfaz(codigo)
+		return True
 	else:
-		messagebox.showwarning("Error", "Usuario no registrado")
+		messagebox.showwarning("Error", "Este codigo de usuario no esta registrado")
+
+""" Funcion para iniciar sesion en el programa """
+def iniciarSesion(codigo):
+	if validarUsuario(codigo):
+		Interfaz(codigo)
+
+""" Funcion para validar si la moneda ingresada esta registrada en coinmarketcap.com usando API"""
+def validarMoneda(moneda):
+	monedas=()
+	monedas_dict={}
+
+	COINMARKET_API_KEY = "57c1101b-e4a3-4450-8290-8fd500f00a5a"
+	headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': COINMARKET_API_KEY}
+
+	data = requests.get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
+		,headers=headers).json()
+
+	for cripto in data["data"]:
+		monedas_dict[cripto["symbol"]]=cripto["name"]
+
+	monedas = monedas_dict.keys()
+
+	if moneda in monedas:
+		return monedas_dict
+	else:
+		messagebox.showwarning("Error", moneda+" Moneda invalida no registrada en coinmarketcap.com")
+
+	""" Funcion para validar que los codigos de quien recibe y envia no sean iguales """	
+def validarCodigo(codigo_envia, codigo_recibe):
+	if codigo_envia != codigo_recibe:
+		return True
+	else:
+		messagebox.showwarning("Error", "Este codigo pertenece a tu usuario")
 
 """ Funcion para guardar registro de transacciones realizadas por cada usuario """
-def guardarTransaccion(operacion, unidades, monedaR, codigoE, moneda_dolares, saldo_nuevo, codigo):
-    archivo = open("transacciones_usuario{}.txt".format(codigo),"a")
+def guardarTransaccion(operacion, unidades, moneda_recibida, codigo_envia, moneda_dolares, saldo_nuevo, codigo_recibe):
+    archivo = open("transacciones_usuario{}.txt".format(codigo_recibe),"a")
     date = datetime.now()
     archivo.write("\n" + "Fecha" + ":" + date.strftime("%A %d/%m/%Y %I:%M:%S%p") + " -Transacción" + ": "+ operacion
-        + " "+unidades+" unidades de la criptomoneda "+ monedaR + " del usuario "+ "con codigo "+ codigoE 
+        + " "+unidades+" unidades de la criptomoneda "+ moneda_recibida + " usuario "+ "con codigo "+ codigo_envia 
         + "\n" + "Total en USDT " + ": " + str(moneda_dolares) + " Nuevo saldo en USDT" + ": "+ str(saldo_nuevo))
     archivo.close()
 
 """ Funcion que valida si la persona que envia dinero tiene saldo suficiente ademas actualiza 
 	el saldo de la persona que recibe dinero en un diccionario temporal de saldos """ 
-def validarSaldo(codigo, codigoE, moneda_dolares, monedaR, cantidad):
-	saldo_actual = float(diccionario_usuarios[codigoE])
+def validarSaldo(codigo_recibe, codigo_envia, moneda_dolares, moneda_recibida, cantidad):
+	saldo_actual = float(diccionario_usuarios[codigo_envia])
 	if moneda_dolares > saldo_actual:
 		messagebox.showwarning("Error", "Transaccion rechazada! valida si el usuario tiene suficiente saldo")
 	else:
-		saldo_nuevo = diccionario_usuarios[codigo] + moneda_dolares
+		saldo_nuevo = diccionario_usuarios[codigo_recibe] + moneda_dolares
 		messagebox.showwarning("Felicidades", "Transaccion exitosa! Tu nuevo saldo es {} dolares".format(saldo_nuevo))
-		diccionario_usuarios[codigo] = saldo_nuevo
-		diccionario_usuarios[codigoE] = saldo_actual - moneda_dolares
-		guardarTransaccion("recibiste", cantidad, monedaR, codigoE, moneda_dolares, saldo_nuevo, codigo)
+		diccionario_usuarios[codigo_recibe] = saldo_nuevo
+		diccionario_usuarios[codigo_envia] = saldo_actual - moneda_dolares
+		guardarTransaccion("recibiste", cantidad, moneda_recibida, codigo_envia, moneda_dolares, saldo_nuevo, codigo_recibe)
+		guardarTransaccion("enviaste", cantidad, moneda_recibida, codigo_recibe, moneda_dolares, saldo_nuevo, codigo_envia)
 		print(diccionario_usuarios)
 
 """ Funcion que valida si el usuario que envia dinero tiene saldo suficiente ademas actualiza 
 	el saldo de la persona que recibe y envia dinero en un diccionario temporal de saldos """ 
-def enviarDinero(codigo, codigoR, moneda_dolares, monedaE, cantidad):
-	saldo_actual = float(diccionario_usuarios[codigo])
+def enviarDinero(codigo_envia, codigo_recibe, moneda_dolares, moneda_enviada, cantidad):
+	saldo_actual = float(diccionario_usuarios[codigo_envia])
 	if moneda_dolares > saldo_actual:
 		messagebox.showwarning("Error", "Transaccion rechazada! tu saldo no es suficiente")
 	else:
-		saldo_nuevo = diccionario_usuarios[codigoR] + moneda_dolares
-		diccionario_usuarios[codigoR] = saldo_nuevo
-		diccionario_usuarios[codigo] = saldo_actual - moneda_dolares
+		saldo_nuevo = diccionario_usuarios[codigo_recibe] + moneda_dolares
+		diccionario_usuarios[codigo_recibe] = saldo_nuevo
+		diccionario_usuarios[codigo_envia] = saldo_actual - moneda_dolares
 		messagebox.showwarning("Felicidades", "Transaccion exitosa! Haz enviado {:5.2f} dolares, tu nuevo saldo es {:5.2f} dolares"
 		.format(moneda_dolares, (saldo_actual - moneda_dolares)))
-		guardarTransaccion("enviaste", cantidad, monedaE, codigoR, moneda_dolares, saldo_nuevo, codigo)
+		guardarTransaccion("enviaste", cantidad, moneda_enviada, codigo_recibe, moneda_dolares, saldo_nuevo, codigo_envia)
+		guardarTransaccion("recibiste", cantidad, moneda_enviada, codigo_envia, moneda_dolares, saldo_nuevo, codigo_recibe)
 		print(diccionario_usuarios)
 
 """ Funcion para crear la URL de consulta para las criptomonedas """
@@ -81,86 +116,32 @@ def get_price(cripto):
     return requests.get(_url("/api/v3/ticker/price?symbol="+cripto))
 
 """ Funcion para validar la criptomoneda, cantidad y codigo de quien se recibe dinero """
-def recibirDatos(monedaR, cantidad, codigoE, codigo):
-	monedas=()
-	monedas_dict={}	
+def recibirDatos(moneda_recibida, cantidad, codigo_envia, codigo_recibe):
 	bandera1 = False
-	bandera2 = False
-	bandera3 = False
+	diccionario_monedas = validarMoneda(moneda_recibida)
 
-	COINMARKET_API_KEY = "57c1101b-e4a3-4450-8290-8fd500f00a5a"
-	headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': COINMARKET_API_KEY}
-
-	data = requests.get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
-		,headers=headers).json()
-
-	for cripto in data["data"]:
-		monedas_dict[cripto["symbol"]]=cripto["name"]
-
-	monedas = monedas_dict.keys()
-
-	if monedaR in monedas:
+	if moneda_recibida in diccionario_monedas:
 		bandera1 = True
-	else:
-		messagebox.showwarning("Error", monedaR+" Moneda invalida no registrada en coimnmarketcap.com")
 
-	if codigo != codigoE:
-		bandera2 = True
-	else:
-		messagebox.showwarning("Error", "Este codigo pertenece a tu usuario")
-
-	if codigoE in diccionario_usuarios:
-		bandera3 = True
-	else:
-		messagebox.showwarning("Error", "Codigo de usuario no valido")
-
-	precioMoneda = get_price(monedaR+"USDT").json()
-	moneda_dolares = float(precioMoneda["price"])*float(cantidad)
-
-	if bandera1 and bandera2 and bandera3:
-		validarSaldo(codigo, codigoE, moneda_dolares, monedaR, cantidad)
+	if  bandera1 and validarCodigo(codigo_envia, codigo_recibe) and validarUsuario(codigo_envia):
+		precioMoneda = get_price(moneda_recibida+"USDT").json() #Se obtiene el valor de la criptomoneda en dolares
+		moneda_dolares = float(precioMoneda["price"])*float(cantidad) #Se multiplica el valor de la moneda en dolares por la cantidad
+		validarSaldo(codigo_recibe, codigo_envia, moneda_dolares, moneda_recibida, cantidad)
 	else:
 		print("Valida los datos ingresados")
 
 """ Funcion para validar la criptomoneda, cantidad y codigo a quien se envia dinero """
-def transferirDinero(monedaE, cantidad, codigoR, codigo):
-	monedas=()
-	monedas_dict={}	
+def transferirDinero(moneda_enviada, cantidad, codigo_recibe, codigo_envia):
 	bandera1 = False
-	bandera2 = False
-	bandera3 = False
+	diccionario_monedas = validarMoneda(moneda_enviada)
 
-	COINMARKET_API_KEY = "57c1101b-e4a3-4450-8290-8fd500f00a5a"
-	headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': COINMARKET_API_KEY}
-
-	data = requests.get("https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
-		,headers=headers).json()
-
-	for cripto in data["data"]:
-		monedas_dict[cripto["symbol"]]=cripto["name"]
-
-	monedas = monedas_dict.keys()
-
-	if monedaE in monedas:
+	if moneda_enviada in diccionario_monedas:
 		bandera1 = True
-	else:
-		messagebox.showwarning("Error", monedaE+" Moneda invalida no registrada en coimnmarketcap.com")
 
-	if codigo != codigoR:
-		bandera2 = True
-	else:
-		messagebox.showwarning("Error", "Este codigo pertenece a tu usuario")
-
-	if codigoR in diccionario_usuarios:
-		bandera3 = True
-	else:
-		messagebox.showwarning("Error", "Codigo de usuario no valido")
-
-	precioMoneda = get_price(monedaE+"USDT").json()
-	moneda_dolares = float(precioMoneda["price"])*float(cantidad)
-
-	if bandera1 and bandera2:
-		enviarDinero(codigo, codigoR, moneda_dolares, monedaE, cantidad)
+	if  bandera1 and validarCodigo(codigo_recibe, codigo_envia) and validarUsuario(codigo_recibe):
+		precioMoneda = get_price(moneda_enviada+"USDT").json() #Se obtiene el valor de la criptomoneda en dolares
+		moneda_dolares = float(precioMoneda["price"])*float(cantidad) #Se multiplica el valor de la moneda en dolares por la cantidad
+		enviarDinero(codigo_envia, codigo_recibe, moneda_dolares, moneda_enviada, cantidad)
 	else:
 		print("Valida los datos ingresados")
 
@@ -224,6 +205,54 @@ def transferirM(codigo):
 	botonRegresar = tk.Button(transferirMonto, text="Regresar", command=transferirMonto.destroy, font=("Arial Bold", 12))
 	botonRegresar.grid(column=2, row=3, sticky="e", padx=20, pady=10)
 
+""" Interfaz para mostrar el balance de una moneda """
+def mostrarBalanceM(codigo):
+	mostrarBalancemoneda = tk.Toplevel()
+	mostrarBalancemoneda.title("Mostrar balance de una moneda")
+	mostrarBalancemoneda.resizable(False, False)
+	mostrarBalancemoneda.iconbitmap("cripto.ico")
+	mostrarBalancemoneda.geometry("600x400+430+100")
+	mostrarBalancemoneda.config(cursor="hand2")
+	nombreMoneda = tk.StringVar()
+	nombreMoneda.set("")
+	cantidadMoneda = tk.StringVar()
+	cantidadMoneda.set("")
+	totalDolares = tk.StringVar()
+	totalDolares.set("")
+
+	def consultaMoneda(moneda):
+		diccionario_monedas = validarMoneda(moneda)
+		nombreMoneda.set(diccionario_monedas.get(moneda))
+		totalDolares.set(diccionario_usuarios[codigo])
+		precioMoneda = get_price(moneda+"USDT").json()
+		cantidadMoneda.set(diccionario_usuarios[codigo]/float(precioMoneda["price"]))
+
+	LabelMoneda=tk.Label(mostrarBalancemoneda, text="Ingrese moneda a consultar",  font=("Arial Bold", 12))
+	LabelMoneda.grid(column=0, row=0, sticky="w", padx=20, pady=10)
+	textoMoneda=tk.Entry(mostrarBalancemoneda)
+	textoMoneda.grid(column=1, row=0, sticky="w", padx=20, pady=10)
+
+	botonEnviardatos = tk.Button(mostrarBalancemoneda, text="Consultar moneda", command=lambda:consultaMoneda(textoMoneda.get()), font=("Arial Bold", 12))
+	botonEnviardatos.grid(column=1, row=3, sticky="w", padx=20, pady=10, columnspan=2)
+
+	Labelnombremoneda=tk.Label(mostrarBalancemoneda, text="Nombre moneda",  font=("Arial Bold", 12))
+	Labelnombremoneda.grid(column=0, row=4, sticky="w", padx=20, pady=10)
+	textonombremoneda=tk.Entry(mostrarBalancemoneda, textvariable=nombreMoneda,  font=("Arial Bold", 12))
+	textonombremoneda.grid(column=1, row=4, sticky="w", padx=20, pady=10)
+
+	Labelnombremoneda=tk.Label(mostrarBalancemoneda, text="Cantidad",  font=("Arial Bold", 12))
+	Labelnombremoneda.grid(column=0, row=5, sticky="w", padx=20, pady=10)
+	textonombremoneda=tk.Entry(mostrarBalancemoneda, textvariable=cantidadMoneda,  font=("Arial Bold", 12))
+	textonombremoneda.grid(column=1, row=5, sticky="w", padx=20, pady=10)
+
+	Labelnombremoneda=tk.Label(mostrarBalancemoneda, text="Total USDT",  font=("Arial Bold", 12))
+	Labelnombremoneda.grid(column=0, row=6, sticky="w", padx=20, pady=10)
+	textonombremoneda=tk.Entry(mostrarBalancemoneda, textvariable=totalDolares,  font=("Arial Bold", 12))
+	textonombremoneda.grid(column=1, row=6, sticky="w", padx=20, pady=10)
+
+	botonRegresar = tk.Button(mostrarBalancemoneda, text="Regresar", command=mostrarBalancemoneda.destroy, font=("Arial Bold", 12))
+	botonRegresar.grid(column=2, row=7, sticky="e", padx=20, pady=10)
+
 """ Interfaz principal donde aparecen todas las opciones del programa """
 def Interfaz(codigo):
 	Interfaz = tk.Toplevel()
@@ -242,7 +271,7 @@ def Interfaz(codigo):
 	botonTransferirmonto = tk.Button(Interfaz, text="Transferir monto", command=lambda:transferirM(codigo), font=("Arial Bold", 12))
 	botonTransferirmonto.grid(column=1, row=4, sticky="w", padx=20, pady=10)
 
-	botonMostrarbalance_m = tk.Button(Interfaz, text="Mostrar balance una moneda", font=("Arial Bold", 12))
+	botonMostrarbalance_m = tk.Button(Interfaz, text="Mostrar balance una moneda", command=lambda:mostrarBalanceM(codigo), font=("Arial Bold", 12))
 	botonMostrarbalance_m.grid(column=1, row=5, sticky="w", padx=20, pady=10)
 
 	botonMostrarbalance_g = tk.Button(Interfaz, text="Mostrar balance general", font=("Arial Bold", 12))
@@ -277,7 +306,7 @@ if __name__ == '__main__':
 	textoCodigo=tk.Entry(Sesion)
 	textoCodigo.grid(column=1, row=2, sticky="w", padx=20, pady=10)
 
-	botonIniciar = tk.Button(Sesion, text="Iniciar Sesion", command=lambda:validarUsuario(textoCodigo.get()), font=("Arial Bold", 12))
+	botonIniciar = tk.Button(Sesion, text="Iniciar Sesion", command=lambda:iniciarSesion(textoCodigo.get()), font=("Arial Bold", 12))
 	botonIniciar.grid(column=0, row=3, sticky="w", padx=140, pady=20, columnspan=2)
 
 	Sesion.mainloop()
